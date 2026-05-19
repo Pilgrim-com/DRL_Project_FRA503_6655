@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Isaac Sim / Lab
+logs/
+_isaac_sim/
+
+# Training outputs (regenerated)
+overestimation_bias/results/
+
+# Virtual environments
+.venv/
+venv/

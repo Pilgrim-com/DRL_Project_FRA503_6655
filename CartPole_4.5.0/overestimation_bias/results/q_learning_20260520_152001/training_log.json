@@ -4133,5 +4133,17 @@
     41.2,
     49.45
   ],
-  "training_time_seconds": 909.0713539123535
+  "behavior_csv_files": [
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep100.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep200.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep300.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep400.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep500.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep600.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep700.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep800.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep900.csv",
+    "/home/drl-68/DRL_Project_FRA503_6655/CartPole_4.5.0/overestimation_bias/scripts/../results/q_learning_20260520_152001/behavior/behavior_ep1000.csv"
+  ],
+  "training_time_seconds": 920.6375834941864
 }

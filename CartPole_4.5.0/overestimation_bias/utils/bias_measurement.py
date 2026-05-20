@@ -1,14 +1,18 @@
 """
 Bias measurement utilities using Monte Carlo returns.
 
-Core idea: compare the Q-value the agent *thinks* a state-action pair is
-worth (Q_estimated) against the *actual* discounted return observed when
-following the greedy policy from that state (Monte Carlo return G_t).
+Two bias metrics:
 
-    Bias(s, a) = Q_estimated(s, a) - G_t
+    TakenAction_Bias = Q(s, a_taken) - MC_Return(s, a_taken)
+    MaxQ_Bias        = max_a Q(s, a) - MC_Return(s, a_taken)
 
-Positive bias = overestimation.  This is the key metric for studying the
-max-operator bias in Q-Learning vs Double Q-Learning.
+MaxQ_Bias isolates the effect of the max operator. Positive MaxQ_Bias
+indicates that the agent's highest-valued action in a state exceeds the
+actual return achieved, which is the theoretical signature of
+overestimation bias.
+
+For Double Q-Learning, max_a Q is computed on the averaged table:
+    Q_combined(s, a) = (Q_A(s, a) + Q_B(s, a)) / 2
 """
 
 from __future__ import annotations
@@ -36,7 +40,6 @@ def compute_mc_returns(rewards: List[float], gamma: float) -> List[float]:
         return []
 
     returns = [0.0] * T
-    # Backward pass: G_t = r_t + gamma * G_{t+1}
     returns[-1] = rewards[-1]
     for t in range(T - 2, -1, -1):
         returns[t] = rewards[t] + gamma * returns[t + 1]
@@ -50,43 +53,44 @@ def aggregate_bias_stats(
     """
     Aggregate bias statistics across multiple evaluation episodes.
 
-    Args:
-        all_episode_data: List of dicts, each with keys
-            "mc_returns", "q_estimates", "biases".
-
-    Returns:
-        Dict with aggregated metrics.
+    Returns both TakenAction_Bias and MaxQ_Bias statistics.
     """
     all_mc = []
-    all_q = []
-    all_bias = []
+    all_q_taken = []
+    all_max_q = []
+    all_taken_bias = []
+    all_maxq_bias = []
 
     for ep_data in all_episode_data:
         steps = ep_data.get("steps", [])
         if steps:
             all_mc.extend([s["mc_return"] for s in steps])
-            all_q.extend([s["q_estimated"] for s in steps])
-            all_bias.extend([s["bias"] for s in steps])
+            all_q_taken.extend([s["q_estimated"] for s in steps])
+            all_max_q.extend([s["max_q_estimated"] for s in steps])
+            all_taken_bias.extend([s["taken_bias"] for s in steps])
+            all_maxq_bias.extend([s["maxq_bias"] for s in steps])
 
-    if len(all_bias) == 0:
+    if len(all_taken_bias) == 0:
         return {
             "avg_mc_return": 0.0,
-            "avg_q_estimate": 0.0,
-            "avg_bias": 0.0,
-            "std_bias": 0.0,
-            "max_bias": 0.0,
-            "min_bias": 0.0,
+            "avg_q_taken": 0.0,
+            "avg_max_q": 0.0,
+            "avg_taken_bias": 0.0,
+            "std_taken_bias": 0.0,
+            "avg_maxq_bias": 0.0,
+            "std_maxq_bias": 0.0,
             "num_samples": 0,
         }
 
     return {
         "avg_mc_return": float(np.mean(all_mc)),
-        "avg_q_estimate": float(np.mean(all_q)),
-        "avg_bias": float(np.mean(all_bias)),
-        "std_bias": float(np.std(all_bias)),
-        "max_bias": float(np.max(all_bias)),
-        "min_bias": float(np.min(all_bias)),
-        "num_samples": len(all_bias),
+        "avg_q_taken": float(np.mean(all_q_taken)),
+        "avg_max_q": float(np.mean(all_max_q)),
+        "avg_taken_bias": float(np.mean(all_taken_bias)),
+        "std_taken_bias": float(np.std(all_taken_bias)),
+        "avg_maxq_bias": float(np.mean(all_maxq_bias)),
+        "std_maxq_bias": float(np.std(all_maxq_bias)),
+        "num_samples": len(all_taken_bias),
     }
 
 
@@ -101,24 +105,25 @@ def evaluate_tabular_agent(
     save_behavior_csv: str = None,
 ) -> Dict[str, object]:
     """
-    Run greedy evaluation episodes and compute bias + behavior data.
+    Run greedy evaluation episodes and compute both bias metrics + behavior.
 
-    Records full per-step CartPole state (cart_position, pole_angle,
-    velocities, action, Q-estimate, MC return, bias) using BehaviorLogger.
+    Records per-step: Q(s, a_taken), max_a Q(s, a), MC return,
+    TakenAction_Bias, and MaxQ_Bias.
 
     Args:
         agent: A tabular Q-Learning or Double Q-Learning agent.
+                Must have get_q_value(s, a) and get_max_q_value(s).
         env: IsaacLab CartPole gym environment.
         discretizer: StateDiscretizer instance.
         n_episodes: Number of evaluation episodes to run.
         gamma: Discount factor for MC return computation.
         max_steps: Max steps per episode (safety limit).
         eval_epsilon: Epsilon during evaluation (0.0 = greedy).
-        save_behavior_csv: If provided, save per-step behavior to this CSV path.
+        save_behavior_csv: If provided, save per-step behavior to this CSV.
 
     Returns:
         Dict with:
-            "bias_stats": aggregated bias statistics
+            "bias_stats": aggregated bias statistics (both metrics)
             "avg_reward": average episode reward
             "avg_duration": average episode length
             "behavior_logger": BehaviorLogger with full per-step data
@@ -144,9 +149,10 @@ def evaluate_tabular_agent(
             # Discretize state
             state_key = discretizer.discretize(obs)
 
-            # Get action and Q-estimate from agent
+            # Get action, Q(s, a_taken), and max_a Q(s, a)
             action_idx = agent.get_action_index(state_key)
-            q_est = agent.get_q_value(state_key, action_idx)
+            q_taken = agent.get_q_value(state_key, action_idx)
+            max_q = agent.get_max_q_value(state_key)
 
             # Map discrete action to continuous and create tensor
             action_val = agent.action_values[action_idx]
@@ -171,13 +177,14 @@ def evaluate_tabular_agent(
                 term = bool(np.squeeze(terminated))
                 trunc = bool(np.squeeze(truncated))
 
-            # Log step with raw observation (for behavior analysis)
+            # Log step with both Q metrics
             logger.log_step(
                 step=step,
                 raw_obs=obs,
                 action_idx=action_idx,
                 action_value=action_val,
-                q_estimated=q_est,
+                q_estimated=q_taken,
+                max_q_estimated=max_q,
                 reward=rew_val,
             )
 

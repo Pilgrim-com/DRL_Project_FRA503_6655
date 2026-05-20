@@ -3,11 +3,12 @@ Behavior logger for CartPole evaluation episodes.
 
 Captures per-step data during greedy evaluation:
     step, cart_position, cart_velocity, pole_angle, pole_angular_velocity,
-    action_idx, action_value, q_estimated, mc_return, bias
+    action_idx, action_value, q_estimated, max_q_estimated,
+    mc_return, taken_bias, maxq_bias
 
-This data is used to understand HOW overestimation bias affects CartPole
-control behavior — not just that it exists, but what it does to the pole,
-cart, and action selection.
+Two bias metrics are recorded:
+    TakenAction_Bias = Q(s, a_taken) - MC_Return
+    MaxQ_Bias        = max_a Q(s, a) - MC_Return
 """
 
 from __future__ import annotations
@@ -38,13 +39,11 @@ class BehaviorLogger:
 
     Usage:
         logger = BehaviorLogger()
-        # During each evaluation episode:
         logger.begin_episode(episode_id)
         for each step:
-            logger.log_step(step, obs, action_idx, action_val, q_est)
+            logger.log_step(step, obs, action_idx, action_val, q_est, max_q, reward)
         logger.end_episode(gamma)
 
-        # After all episodes:
         logger.save_csv(path)
         logger.get_action_distribution()
     """
@@ -68,6 +67,7 @@ class BehaviorLogger:
         action_idx: int,
         action_value: float,
         q_estimated: float,
+        max_q_estimated: float,
         reward: float,
     ) -> None:
         """
@@ -76,10 +76,10 @@ class BehaviorLogger:
         Args:
             step: Step number within the episode.
             raw_obs: Raw IsaacLab observation (dict or tensor).
-                     Expected shape: obs["policy"] → (1, 4) or (4,).
             action_idx: Discrete action index chosen.
             action_value: Continuous action value sent to env.
-            q_estimated: Q(s, a) from the agent.
+            q_estimated: Q(s, a_taken) from the agent.
+            max_q_estimated: max_a Q(s, a) from the agent.
             reward: Reward received after taking this action.
         """
         # Extract continuous observation values
@@ -102,16 +102,18 @@ class BehaviorLogger:
             "action_idx": action_idx,
             "action_value": action_value,
             "q_estimated": q_estimated,
+            "max_q_estimated": max_q_estimated,
             "reward": reward,
-            # mc_return and bias filled in end_episode()
+            # Filled in end_episode():
             "mc_return": 0.0,
-            "bias": 0.0,
+            "taken_bias": 0.0,
+            "maxq_bias": 0.0,
         })
         self._current_rewards.append(reward)
 
     def end_episode(self, gamma: float) -> Dict:
         """
-        Finalize the current episode: compute MC returns and bias.
+        Finalize the current episode: compute MC returns and both bias metrics.
 
         Args:
             gamma: Discount factor for MC return computation.
@@ -125,17 +127,18 @@ class BehaviorLogger:
         # Compute MC returns for each step
         mc_returns = _compute_mc_returns(self._current_rewards, gamma)
 
-        # Fill in mc_return and bias for each step
+        # Fill in mc_return and both bias metrics for each step
         for i, step_data in enumerate(self._current_steps):
             step_data["mc_return"] = mc_returns[i]
-            step_data["bias"] = step_data["q_estimated"] - mc_returns[i]
+            step_data["taken_bias"] = step_data["q_estimated"] - mc_returns[i]
+            step_data["maxq_bias"] = step_data["max_q_estimated"] - mc_returns[i]
 
         # Episode summary
         episode_data = {
             "episode_id": self._current_episode_id,
             "duration": len(self._current_steps),
             "total_reward": sum(self._current_rewards),
-            "steps": list(self._current_steps),  # copy
+            "steps": list(self._current_steps),
         }
         self.episodes.append(episode_data)
 
@@ -153,10 +156,7 @@ class BehaviorLogger:
         """
         Save all logged episodes as a flat CSV file.
 
-        Each row = one step. Columns:
-            episode, step, cart_position, pole_angle, cart_velocity,
-            pole_angular_velocity, action_idx, action_value,
-            q_estimated, reward, mc_return, bias
+        Each row = one step. Includes both bias metrics.
         """
         os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
 
@@ -164,7 +164,8 @@ class BehaviorLogger:
             "episode", "step", "cart_position", "pole_angle",
             "cart_velocity", "pole_angular_velocity",
             "action_idx", "action_value",
-            "q_estimated", "reward", "mc_return", "bias",
+            "q_estimated", "max_q_estimated",
+            "reward", "mc_return", "taken_bias", "maxq_bias",
         ]
 
         with open(filepath, "w", newline="") as f:
@@ -187,12 +188,7 @@ class BehaviorLogger:
     # ------------------------------------------------------------------ #
 
     def get_action_distribution(self, num_actions: int = 5) -> Dict[int, int]:
-        """
-        Count how often each discrete action was selected across all episodes.
-
-        Returns:
-            Dict mapping action_idx → count.
-        """
+        """Count how often each discrete action was selected across all episodes."""
         counts = {i: 0 for i in range(num_actions)}
         for ep in self.episodes:
             for step_data in ep["steps"]:
@@ -211,14 +207,7 @@ class BehaviorLogger:
         return flat
 
     def get_episode_summaries(self) -> List[Dict]:
-        """
-        Get per-episode summary statistics.
-
-        Returns list of dicts with keys:
-            episode_id, duration, total_reward,
-            avg_q_estimated, avg_mc_return, avg_bias,
-            avg_abs_pole_angle, avg_abs_cart_position
-        """
+        """Get per-episode summary statistics including both bias metrics."""
         summaries = []
         for ep in self.episodes:
             steps = ep["steps"]
@@ -228,13 +217,15 @@ class BehaviorLogger:
                 "episode_id": ep["episode_id"],
                 "duration": ep["duration"],
                 "total_reward": ep["total_reward"],
-                "avg_q_estimated": np.mean([s["q_estimated"] for s in steps]),
-                "avg_mc_return": np.mean([s["mc_return"] for s in steps]),
-                "avg_bias": np.mean([s["bias"] for s in steps]),
-                "avg_abs_pole_angle": np.mean([abs(s["pole_angle"]) for s in steps]),
-                "avg_abs_cart_position": np.mean([abs(s["cart_position"]) for s in steps]),
-                "max_abs_pole_angle": max(abs(s["pole_angle"]) for s in steps),
-                "max_abs_cart_position": max(abs(s["cart_position"]) for s in steps),
+                "avg_q_estimated": float(np.mean([s["q_estimated"] for s in steps])),
+                "avg_max_q_estimated": float(np.mean([s["max_q_estimated"] for s in steps])),
+                "avg_mc_return": float(np.mean([s["mc_return"] for s in steps])),
+                "avg_taken_bias": float(np.mean([s["taken_bias"] for s in steps])),
+                "avg_maxq_bias": float(np.mean([s["maxq_bias"] for s in steps])),
+                "avg_abs_pole_angle": float(np.mean([abs(s["pole_angle"]) for s in steps])),
+                "avg_abs_cart_position": float(np.mean([abs(s["cart_position"]) for s in steps])),
+                "max_abs_pole_angle": float(max(abs(s["pole_angle"]) for s in steps)),
+                "max_abs_cart_position": float(max(abs(s["cart_position"]) for s in steps)),
             })
         return summaries
 

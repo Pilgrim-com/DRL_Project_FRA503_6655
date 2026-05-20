@@ -62,6 +62,13 @@ class TabularConfig:
     max_steps_per_episode: int = 500  # env also terminates at episode_length_s=10
 
     # ------------------------------------------------------------------ #
+    # Multi-seed experiment
+    # ------------------------------------------------------------------ #
+    seeds: List[int] = field(
+        default_factory=lambda: [0, 42, 123, 256, 999]
+    )
+
+    # ------------------------------------------------------------------ #
     # Logging & checkpoints
     # ------------------------------------------------------------------ #
     log_interval: int = 50          # Print progress every N episodes
@@ -81,6 +88,26 @@ class TabularConfig:
     models_dir: str = "results/models"
     logs_dir: str = "results/logs"
     plots_dir: str = "results/plots"
+
+
+# ====================================================================== #
+# Preset configurations
+# ====================================================================== #
+
+def debug_config() -> TabularConfig:
+    """Quick test: 1,000 episodes, single seed."""
+    cfg = TabularConfig()
+    cfg.n_episodes = 1000
+    cfg.seeds = [42]
+    return cfg
+
+
+def full_config() -> TabularConfig:
+    """Full experiment: 5,000 episodes, 5 seeds."""
+    cfg = TabularConfig()
+    cfg.n_episodes = 5000
+    cfg.seeds = [0, 42, 123, 256, 999]
+    return cfg
 
 
 # ====================================================================== #

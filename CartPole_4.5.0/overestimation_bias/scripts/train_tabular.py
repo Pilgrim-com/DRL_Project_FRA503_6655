@@ -4,23 +4,17 @@ on IsaacLab CartPole (Stabilize-Isaac-Cartpole-v0).
 
 Features:
 - Supports both Q-Learning and Double Q-Learning via --algorithm flag
-- Periodic bias evaluation using Monte Carlo returns
-- Saves training logs as JSON
+- Periodic bias evaluation with Monte Carlo returns
+- Saves per-step behavior data (CartPole state) as CSV at each eval checkpoint
+- Saves training metrics as JSON
 - Saves Q-table checkpoints as pickle files
-- Progress bar with tqdm
 
 Usage:
-    # Q-Learning (1000 episodes for debugging)
     python scripts/train_tabular.py --task Stabilize-Isaac-Cartpole-v0 \\
         --algorithm q_learning --episodes 1000
 
-    # Double Q-Learning
     python scripts/train_tabular.py --task Stabilize-Isaac-Cartpole-v0 \\
         --algorithm double_q_learning --episodes 1000
-
-    # Full experiment (3000 episodes)
-    python scripts/train_tabular.py --task Stabilize-Isaac-Cartpole-v0 \\
-        --algorithm q_learning --episodes 3000
 """
 
 import argparse
@@ -112,7 +106,9 @@ def main():
         os.path.dirname(__file__), "..", cfg.results_dir, run_name
     )
     models_dir = os.path.join(run_dir, "models")
+    behavior_dir = os.path.join(run_dir, "behavior")
     os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(behavior_dir, exist_ok=True)
 
     print("\n" + "=" * 70)
     print(f"  Training: {args_cli.algorithm}")
@@ -165,13 +161,15 @@ def main():
         "episode_avg_q": [],
         "epsilon_history": [],
         # Bias evaluation data (recorded periodically)
-        "bias_eval_episodes": [],       # episode numbers where bias was evaluated
+        "bias_eval_episodes": [],
         "bias_avg_mc_return": [],
         "bias_avg_q_estimate": [],
         "bias_avg_bias": [],
         "bias_std_bias": [],
         "bias_avg_reward": [],
         "bias_avg_duration": [],
+        # Behavior CSV file paths saved at each eval
+        "behavior_csv_files": [],
     }
 
     # ------------------------------------------------------------------ #
@@ -257,10 +255,16 @@ def main():
                 running_reward = 0.0
                 running_duration = 0
 
-            # ---- Periodic bias evaluation ---- #
+            # ---- Periodic bias evaluation + behavior logging ---- #
             if (episode + 1) % cfg.bias_eval_interval == 0:
-                tqdm.write(f"  [Bias Eval] Running {cfg.bias_eval_episodes} "
-                           f"greedy episodes...")
+                ep_num = episode + 1
+                behavior_csv = os.path.join(
+                    behavior_dir, f"behavior_ep{ep_num}.csv"
+                )
+
+                tqdm.write(f"  [Eval] Running {cfg.bias_eval_episodes} "
+                           f"greedy episodes at ep {ep_num}...")
+
                 eval_result = evaluate_tabular_agent(
                     agent=agent,
                     env=env,
@@ -269,23 +273,37 @@ def main():
                     gamma=cfg.discount_factor,
                     max_steps=cfg.max_steps_per_episode,
                     eval_epsilon=cfg.eval_epsilon,
-                )
-                stats = eval_result["bias_stats"]
-                tqdm.write(
-                    f"  [Bias Eval] "
-                    f"Avg MC Return: {stats['avg_mc_return']:7.3f} | "
-                    f"Avg Q-est: {stats['avg_q_estimate']:7.3f} | "
-                    f"Avg Bias: {stats['avg_bias']:+7.3f} | "
-                    f"Eval Reward: {eval_result['avg_reward']:7.2f}"
+                    save_behavior_csv=behavior_csv,
                 )
 
-                training_log["bias_eval_episodes"].append(episode + 1)
+                stats = eval_result["bias_stats"]
+                logger = eval_result["behavior_logger"]
+
+                # Action distribution
+                action_dist = logger.get_action_distribution(cfg.num_actions)
+                total_actions = sum(action_dist.values())
+                action_pcts = {
+                    f"a{k}({cfg.action_values[k]:+.1f})": f"{v/max(total_actions,1)*100:.0f}%"
+                    for k, v in action_dist.items()
+                }
+
+                tqdm.write(
+                    f"  [Eval] "
+                    f"MC Ret: {stats['avg_mc_return']:7.3f} | "
+                    f"Q-est: {stats['avg_q_estimate']:7.3f} | "
+                    f"Bias: {stats['avg_bias']:+7.3f} | "
+                    f"Reward: {eval_result['avg_reward']:7.2f} | "
+                    f"Actions: {action_pcts}"
+                )
+
+                training_log["bias_eval_episodes"].append(ep_num)
                 training_log["bias_avg_mc_return"].append(stats["avg_mc_return"])
                 training_log["bias_avg_q_estimate"].append(stats["avg_q_estimate"])
                 training_log["bias_avg_bias"].append(stats["avg_bias"])
                 training_log["bias_std_bias"].append(stats["std_bias"])
                 training_log["bias_avg_reward"].append(eval_result["avg_reward"])
                 training_log["bias_avg_duration"].append(eval_result["avg_duration"])
+                training_log["behavior_csv_files"].append(behavior_csv)
 
             # ---- Periodic checkpoint ---- #
             if (episode + 1) % cfg.save_interval == 0:
@@ -308,10 +326,11 @@ def main():
 
     print(f"\n{'=' * 70}")
     print(f"  Training complete!")
-    print(f"  Time:    {elapsed:.1f}s ({elapsed / 60:.1f} min)")
-    print(f"  Model:   {models_dir}/{args_cli.algorithm}_final.pkl")
-    print(f"  Log:     {log_path}")
-    print(f"  States:  {agent.num_visited_states()} unique states visited")
+    print(f"  Time:      {elapsed:.1f}s ({elapsed / 60:.1f} min)")
+    print(f"  Model:     {models_dir}/{args_cli.algorithm}_final.pkl")
+    print(f"  Log:       {log_path}")
+    print(f"  Behavior:  {behavior_dir}/ ({len(training_log['behavior_csv_files'])} CSVs)")
+    print(f"  States:    {agent.num_visited_states()} unique states visited")
     print(f"{'=' * 70}\n")
 
     env.close()

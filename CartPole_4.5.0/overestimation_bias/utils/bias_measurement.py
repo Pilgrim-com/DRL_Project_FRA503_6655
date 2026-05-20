@@ -14,8 +14,8 @@ max-operator bias in Q-Learning vs Double Q-Learning.
 from __future__ import annotations
 
 import numpy as np
-from typing import List, Dict, Tuple, Optional
-from collections import defaultdict
+from typing import List, Dict
+from utils.behavior_logger import BehaviorLogger
 
 
 def compute_mc_returns(rewards: List[float], gamma: float) -> List[float]:
@@ -44,39 +44,6 @@ def compute_mc_returns(rewards: List[float], gamma: float) -> List[float]:
     return returns
 
 
-def collect_episode_data(
-    states: List[tuple],
-    actions: List[int],
-    rewards: List[float],
-    q_estimates: List[float],
-    gamma: float,
-) -> Dict[str, list]:
-    """
-    For a single evaluation episode, compute MC returns and per-step bias.
-
-    Args:
-        states: Discretized state tuples at each step.
-        actions: Action indices at each step.
-        rewards: Rewards received at each step.
-        q_estimates: Q(s_t, a_t) estimated by the agent at each step.
-        gamma: Discount factor.
-
-    Returns:
-        Dict with keys:
-            "mc_returns": List[float]  — G_t for each step
-            "q_estimates": List[float] — Q(s_t, a_t) for each step
-            "biases": List[float]      — Q_est - G_t for each step
-    """
-    mc_returns = compute_mc_returns(rewards, gamma)
-    biases = [q - g for q, g in zip(q_estimates, mc_returns)]
-
-    return {
-        "mc_returns": mc_returns,
-        "q_estimates": q_estimates,
-        "biases": biases,
-    }
-
-
 def aggregate_bias_stats(
     all_episode_data: List[Dict[str, list]],
 ) -> Dict[str, float]:
@@ -84,26 +51,22 @@ def aggregate_bias_stats(
     Aggregate bias statistics across multiple evaluation episodes.
 
     Args:
-        all_episode_data: List of dicts from collect_episode_data().
+        all_episode_data: List of dicts, each with keys
+            "mc_returns", "q_estimates", "biases".
 
     Returns:
-        Dict with aggregated metrics:
-            "avg_mc_return": average MC return across all steps/episodes
-            "avg_q_estimate": average Q estimate across all steps/episodes
-            "avg_bias": average overestimation bias
-            "std_bias": standard deviation of bias
-            "max_bias": maximum bias observed
-            "min_bias": minimum bias observed
-            "num_samples": total number of (s,a) samples
+        Dict with aggregated metrics.
     """
     all_mc = []
     all_q = []
     all_bias = []
 
     for ep_data in all_episode_data:
-        all_mc.extend(ep_data["mc_returns"])
-        all_q.extend(ep_data["q_estimates"])
-        all_bias.extend(ep_data["biases"])
+        steps = ep_data.get("steps", [])
+        if steps:
+            all_mc.extend([s["mc_return"] for s in steps])
+            all_q.extend([s["q_estimated"] for s in steps])
+            all_bias.extend([s["bias"] for s in steps])
 
     if len(all_bias) == 0:
         return {
@@ -135,13 +98,13 @@ def evaluate_tabular_agent(
     gamma: float,
     max_steps: int = 500,
     eval_epsilon: float = 0.0,
+    save_behavior_csv: str = None,
 ) -> Dict[str, object]:
     """
-    Run greedy evaluation episodes and compute bias statistics.
+    Run greedy evaluation episodes and compute bias + behavior data.
 
-    This function temporarily overrides the agent's epsilon to eval_epsilon
-    (default 0.0 = fully greedy), runs episodes, computes Monte Carlo returns,
-    and measures overestimation bias.
+    Records full per-step CartPole state (cart_position, pole_angle,
+    velocities, action, Q-estimate, MC return, bias) using BehaviorLogger.
 
     Args:
         agent: A tabular Q-Learning or Double Q-Learning agent.
@@ -151,13 +114,14 @@ def evaluate_tabular_agent(
         gamma: Discount factor for MC return computation.
         max_steps: Max steps per episode (safety limit).
         eval_epsilon: Epsilon during evaluation (0.0 = greedy).
+        save_behavior_csv: If provided, save per-step behavior to this CSV path.
 
     Returns:
         Dict with:
-            "bias_stats": aggregated bias statistics (dict)
+            "bias_stats": aggregated bias statistics
             "avg_reward": average episode reward
             "avg_duration": average episode length
-            "episode_data": list of per-episode data dicts
+            "behavior_logger": BehaviorLogger with full per-step data
     """
     import torch
 
@@ -165,19 +129,16 @@ def evaluate_tabular_agent(
     original_epsilon = agent.epsilon
     agent.epsilon = eval_epsilon
 
-    all_episode_data = []
+    logger = BehaviorLogger()
     total_reward = 0.0
     total_duration = 0
 
     for ep in range(n_episodes):
         obs, _ = env.reset()
         done = False
-
-        states = []
-        actions = []
-        rewards = []
-        q_estimates = []
         step = 0
+
+        logger.begin_episode(episode_id=ep)
 
         while not done and step < max_steps:
             # Discretize state
@@ -210,32 +171,38 @@ def evaluate_tabular_agent(
                 term = bool(np.squeeze(terminated))
                 trunc = bool(np.squeeze(truncated))
 
-            # Record step data
-            states.append(state_key)
-            actions.append(action_idx)
-            rewards.append(rew_val)
-            q_estimates.append(q_est)
+            # Log step with raw observation (for behavior analysis)
+            logger.log_step(
+                step=step,
+                raw_obs=obs,
+                action_idx=action_idx,
+                action_value=action_val,
+                q_estimated=q_est,
+                reward=rew_val,
+            )
 
             done = term or trunc
             obs = next_obs
             step += 1
 
-        # Compute MC returns and bias for this episode
-        ep_data = collect_episode_data(states, actions, rewards, q_estimates, gamma)
-        all_episode_data.append(ep_data)
-
-        total_reward += sum(rewards)
-        total_duration += step
+        # End episode: compute MC returns and per-step bias
+        ep_summary = logger.end_episode(gamma)
+        total_reward += ep_summary.get("total_reward", 0.0)
+        total_duration += ep_summary.get("duration", 0)
 
     # Restore epsilon
     agent.epsilon = original_epsilon
 
-    # Aggregate
-    bias_stats = aggregate_bias_stats(all_episode_data)
+    # Aggregate bias stats from logger data
+    bias_stats = aggregate_bias_stats(logger.episodes)
+
+    # Save behavior CSV if requested
+    if save_behavior_csv:
+        logger.save_csv(save_behavior_csv)
 
     return {
         "bias_stats": bias_stats,
         "avg_reward": total_reward / max(n_episodes, 1),
         "avg_duration": total_duration / max(n_episodes, 1),
-        "episode_data": all_episode_data,
+        "behavior_logger": logger,
     }

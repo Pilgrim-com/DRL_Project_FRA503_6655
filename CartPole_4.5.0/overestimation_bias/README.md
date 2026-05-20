@@ -2,30 +2,38 @@
 
 ## Project Overview
 
-This project studies **overestimation bias** in value-based reinforcement learning algorithms using the **CartPole** environment from **IsaacLab**.
+This project studies **overestimation bias** in value-based RL using the **CartPole** environment from **IsaacLab**.
+
+### Research Questions
+
+1. **Does overestimation bias actually occur** in IsaacLab CartPole?
+2. **How does it affect CartPole behavior** — pole stability, cart drift, action selection?
 
 ### The Problem
 
-In standard Q-Learning, the Q-value update uses the **max operator** to estimate the value of the next state:
+Standard Q-Learning uses the **max operator** which uses the same Q-table to both **select** the best action and **evaluate** its value. When Q-values contain estimation errors, `max` systematically picks overestimated values:
 
 ```
-Q(s, a) ← Q(s, a) + α * [r + γ * max_a' Q(s', a') - Q(s, a)]
+Q-Learning target:  r + γ * max_a' Q(s', a')    ← same table selects AND evaluates
 ```
-
-The `max` operator uses the **same** Q-table to both **select** the best action and **evaluate** its value. When Q-values contain estimation errors (which they always do during learning), `max` systematically picks actions whose values are *overestimated* due to noise, causing an **upward bias** in Q-value estimates.
 
 ### The Solution: Double Q-Learning
 
-**Double Q-Learning** (van Hasselt, 2010) addresses this by maintaining **two independent Q-tables** (Q_A and Q_B):
+**Double Q-Learning** maintains **two independent Q-tables** and decouples selection from evaluation:
 
 ```
-# When updating Q_A:
-a* = argmax_a Q_A(s', a)           # Q_A selects the best action
-target = r + γ * Q_B(s', a*)       # Q_B evaluates that action (decoupled!)
-Q_A(s, a) ← Q_A(s, a) + α * [target - Q_A(s, a)]
+Double Q target:  r + γ * Q_B(s', argmax_a' Q_A(s', a'))   ← A selects, B evaluates
 ```
 
-By **decoupling** action selection from action evaluation, the systematic upward bias is substantially reduced.
+### How Bias Affects CartPole Control
+
+Overestimation bias doesn't just inflate numbers — it changes **what the agent does**:
+
+- **Over-correction**: Q-Learning may select overestimated actions, causing jerky control
+- **Pole oscillation**: Biased action values lead to over-shooting corrections
+- **Cart drift**: Systematic action bias can push the cart toward boundaries
+- **Shorter episodes**: Overconfident actions can cause earlier termination
+- **Q-value inflation**: Q-estimates grow high even when actual returns are lower
 
 ---
 
@@ -38,20 +46,18 @@ By **decoupling** action selection from action evaluation, the systematic upward
 ### Environment
 - **IsaacLab CartPole** (`Stabilize-Isaac-Cartpole-v0`)
 - 4D continuous observations: cart position, pole angle, cart velocity, pole angular velocity
-- Continuous action discretized to 5 values: `[-1.0, -0.5, 0.0, 0.5, 1.0]`
-- State space discretized into bins: `[8, 16, 8, 8]` → 8,192 discrete states
+- Action discretized to 5 values: `[-1.0, -0.5, 0.0, 0.5, 1.0]`
+- State discretized into bins: `[8, 16, 8, 8]` → 8,192 discrete states
 
 ### Bias Measurement
 
-For each trained policy, we measure overestimation bias by comparing **Q-value estimates** against **Monte Carlo returns**:
+```
+Bias(s, a) = Q_estimated(s, a) − MC_Return(s, a)
 
-1. Run greedy evaluation episodes (ε = 0)
-2. For each step, record Q(s, a) from the agent
-3. Compute actual discounted return: `G_t = r_{t+1} + γ*r_{t+2} + γ²*r_{t+3} + ...`
-4. Compute bias: `Bias(s, a) = Q_estimated(s, a) - G_t`
-5. Average across all visited samples
+MC_Return: G_t = r_{t+1} + γ·r_{t+2} + γ²·r_{t+3} + ...
+```
 
-**Positive bias = overestimation.** Q-Learning should show consistently higher positive bias than Double Q-Learning.
+Positive bias = overestimation. Measured periodically during training using greedy evaluation episodes.
 
 ---
 
@@ -60,105 +66,104 @@ For each trained policy, we measure overestimation bias by comparing **Q-value e
 ```
 overestimation_bias/
 ├── algorithms/
-│   ├── q_learning.py              # Tabular Q-Learning
-│   └── double_q_learning.py       # Tabular Double Q-Learning
+│   ├── q_learning.py                   # Tabular Q-Learning
+│   └── double_q_learning.py            # Tabular Double Q-Learning
 ├── utils/
-│   ├── discretizer.py             # Continuous → discrete state mapping
-│   └── bias_measurement.py        # Monte Carlo returns & bias computation
+│   ├── discretizer.py                  # Continuous → discrete state mapping
+│   ├── bias_measurement.py             # MC returns, bias computation, evaluation
+│   └── behavior_logger.py              # Per-step CartPole state logging
 ├── configs/
-│   └── hyperparams.py             # Centralized hyperparameter configuration
+│   └── hyperparams.py                  # Centralized hyperparameters
 ├── scripts/
-│   ├── smoke_test_env.py          # Verify environment format
-│   ├── train_tabular.py           # Train Q-Learning or Double Q-Learning
-│   └── plot_tabular_results.py    # Generate comparison plots
-├── results/                       # Auto-created: logs, models, plots
-└── README.md                      # This file
+│   ├── smoke_test_env.py               # Verify environment format
+│   ├── train_tabular.py                # Train with periodic bias + behavior eval
+│   ├── evaluate_behavior.py            # Standalone evaluation with behavior logging
+│   └── plot_tabular_bias_behavior.py   # Generate all comparison plots
+└── README.md
 ```
 
 ---
 
 ## How to Run
 
-### Prerequisites
-- IsaacLab (Isaac Sim) installed and configured
-- CartPole extension installed: `python -m pip install -e ./source/CartPole`
-- Python packages: `numpy`, `matplotlib`, `tqdm`
-
-### Step 1: Smoke Test (verify environment)
-
+### Step 1: Smoke Test
 ```bash
 cd CartPole_4.5.0/overestimation_bias
-python scripts/smoke_test_env.py --task Stabilize-Isaac-Cartpole-v0 --num_envs 1
+python scripts/smoke_test_env.py --task Stabilize-Isaac-Cartpole-v0
 ```
 
-This verifies observation shape, action format, and discretizer functionality.
-
 ### Step 2: Train Q-Learning
-
 ```bash
 python scripts/train_tabular.py --task Stabilize-Isaac-Cartpole-v0 \
     --algorithm q_learning --episodes 1000
 ```
 
 ### Step 3: Train Double Q-Learning
-
 ```bash
 python scripts/train_tabular.py --task Stabilize-Isaac-Cartpole-v0 \
     --algorithm double_q_learning --episodes 1000
 ```
 
-### Step 4: Generate Plots
-
+### Step 4: (Optional) Standalone Evaluation
 ```bash
-python scripts/plot_tabular_results.py --auto
+python scripts/evaluate_behavior.py --task Stabilize-Isaac-Cartpole-v0 \
+    --algorithm q_learning \
+    --model results/q_learning_TIMESTAMP/models/q_learning_final.pkl \
+    --eval_episodes 50
 ```
 
-Or specify log files directly:
-
+### Step 5: Generate Plots
 ```bash
-python scripts/plot_tabular_results.py \
-    --q_log results/q_learning_TIMESTAMP/training_log.json \
-    --dq_log results/double_q_learning_TIMESTAMP/training_log.json
+python scripts/plot_tabular_bias_behavior.py --auto
 ```
+
+---
+
+## Plots Generated
+
+| # | Plot | What It Shows |
+|---|------|---------------|
+| 1 | `01_reward_curves.png` | Episode reward over training |
+| 2 | `02_duration_curves.png` | Episode duration (survival time) |
+| 3 | `03_q_vs_mc_return.png` | Q-estimate vs actual MC return |
+| 4 | `04_bias_curves.png` | Overestimation bias over training |
+| 5 | `05_action_distribution.png` | Which actions each algorithm prefers |
+| 6 | `06_trajectory_pole_angle.png` | Pole stability comparison |
+| 7 | `07_trajectory_cart_position.png` | Cart drift comparison |
+| 8 | `08_trajectory_actions.png` | Action selection pattern over time |
+| 9 | `09_trajectory_bias.png` | Per-step bias within an episode |
+| 10 | `10_combined_summary.png` | 2×3 combined summary figure |
+
+---
+
+## Behavior Data
+
+During each evaluation checkpoint, the training script saves a CSV file with per-step data:
+
+```
+episode, step, cart_position, pole_angle, cart_velocity, pole_angular_velocity,
+action_idx, action_value, q_estimated, reward, mc_return, bias
+```
+
+This enables detailed post-hoc analysis of how overestimation bias affects CartPole control.
 
 ---
 
 ## Hyperparameters
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Learning rate (α) | 0.1 | Same for both algorithms |
-| Discount factor (γ) | 0.99 | Standard value |
-| ε start | 1.0 | Full exploration initially |
-| ε end | 0.01 | Minimal exploration at convergence |
-| ε decay | 0.995 | Multiplicative per episode |
-| State bins | [8, 16, 8, 8] | 8,192 total discrete states |
-| Actions | [-1.0, -0.5, 0.0, 0.5, 1.0] | 5 discrete actions |
-| Bias eval interval | Every 100 episodes | 20 greedy episodes per eval |
-
----
-
-## Experiment Design
-
-### Experiment 1: Q-Learning vs Double Q-Learning
-
-**Hypothesis:** Q-Learning will exhibit higher overestimation bias than Double Q-Learning because the max operator in Q-Learning uses the same Q-table for both action selection and evaluation.
-
-**Protocol:**
-1. Train both algorithms with identical hyperparameters for fair comparison
-2. Every 100 training episodes, pause and run 20 greedy evaluation episodes
-3. During evaluation, record Q(s,a) estimates and compute Monte Carlo returns
-4. Compare: reward curves, duration curves, Q-estimates vs MC returns, bias curves
-
-**Expected Results:**
-- Both algorithms should learn to balance the pole (increasing reward/duration)
-- Q-Learning's Q-value estimates should consistently exceed MC returns (positive bias)
-- Double Q-Learning's estimates should track MC returns more closely (near-zero bias)
-- Q-Learning may show higher variance in Q-value estimates
+| Parameter | Value |
+|-----------|-------|
+| Learning rate (α) | 0.1 |
+| Discount factor (γ) | 0.99 |
+| ε start → end | 1.0 → 0.01 (×0.995/episode) |
+| State bins | [8, 16, 8, 8] = 8,192 states |
+| Actions | [-1.0, -0.5, 0.0, 0.5, 1.0] |
+| Debug episodes | 1,000 |
+| Full episodes | 3,000–5,000 |
+| Eval interval | Every 100 episodes |
+| Eval episodes | 20 greedy episodes |
 
 ---
 
 ## Phase 2 (Planned)
-- DQN (Deep Q-Network)
-- Double DQN
-- Double DQN + Prioritized Experience Replay
+- DQN, Double DQN, Double DQN + Prioritized Experience Replay

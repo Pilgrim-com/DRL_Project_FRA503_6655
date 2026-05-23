@@ -32,9 +32,9 @@ class DQNConfig:
     learning_rate: float = 1e-4
     batch_size: int = 64
     buffer_size: int = 50_000
-    min_buffer_size: int = 1_000
-    gradient_clip: float = 10.0
-    gamma: float = 0.99
+    min_buffer_size: int = 5_000  # Increased for diverse warmup batches
+    gradient_clip: float = 1.0    # Reduced to prevent destabilizing large updates
+    gamma: float = 0.95           # Reduced to prevent scale inflation in short horizons
 
     # Epsilon schedule (linear decay over steps)
     epsilon_start: float = 1.0
@@ -42,7 +42,7 @@ class DQNConfig:
     epsilon_decay_steps: int = 50_000
 
     # Target network
-    target_update_interval: int = 1_000  # steps
+    target_update_interval: int = 100  # steps. Reduced to correct bootstrap errors early
 
     # Evaluation
     eval_interval: int = 100    # episodes
@@ -70,9 +70,17 @@ def dqn_debug_config() -> DQNConfig:
 
 
 def dqn_full_config() -> DQNConfig:
-    """Full experiment: 3000 episodes, 5 seeds."""
+    """Full experiment: 1000 episodes, 5 seeds."""
     cfg = DQNConfig()
-    cfg.n_episodes = 3000
+    cfg.n_episodes = 1000  # Reduced to iterate faster during debugging
+    cfg.seeds = [0, 42, 123, 256, 999]
+    return cfg
+
+
+def dqn_stable_config() -> DQNConfig:
+    """Stable multi-seed experiment using tuned hyperparams."""
+    cfg = DQNConfig()
+    cfg.n_episodes = 1000
     cfg.seeds = [0, 42, 123, 256, 999]
     return cfg
 

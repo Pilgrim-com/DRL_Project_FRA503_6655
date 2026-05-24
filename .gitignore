@@ -26,3 +26,6 @@ _isaac_sim/
 # Virtual environments
 .venv/
 venv/
+
+# Documentation / Reports
+Report/

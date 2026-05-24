@@ -1,0 +1,107 @@
+<style>
+.slide{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:2rem 2.5rem}
+.slide-tag{font-size:11px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem}
+.slide-title{font-size:20px;font-weight:500;color:var(--color-text-primary);margin:0 0 1.5rem;padding-bottom:.75rem;border-bottom:0.5px solid var(--color-border-tertiary)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1rem}
+.card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:1rem 1.25rem;border:0.5px solid var(--color-border-tertiary)}
+.card-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-tertiary);margin-bottom:.6rem}
+.card-body{font-size:12px;color:var(--color-text-secondary);line-height:1.65}
+.divider{border:none;border-top:0.5px solid var(--color-border-tertiary);margin:1rem 0}
+.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 9px;border-radius:8px;margin-bottom:.3rem}
+.badge-teal{background:#E1F5EE;color:#085041;border:0.5px solid #5DCAA5}
+.badge-blue{background:#E6F1FB;color:#0C447C;border:0.5px solid #85BAE8}
+.badge-amber{background:#FDF3E0;color:#7A4E00;border:0.5px solid #EFC97A}
+.badge-gray{background:var(--color-background-secondary);color:var(--color-text-secondary);border:0.5px solid var(--color-border-secondary)}
+.takeaway-row{display:flex;gap:.75rem;align-items:flex-start;margin:.5rem 0}
+.takeaway-num{min-width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;background:#E6F1FB;color:#0C447C;border:0.5px solid #85BAE8}
+.takeaway-body{font-size:12.5px;color:var(--color-text-primary);line-height:1.6;padding-top:4px}
+.takeaway-body span{color:var(--color-text-secondary);font-size:12px}
+.num-inline{font-family:var(--font-mono);font-size:11px;font-weight:600}
+.col-red{color:#A32D2D}
+.col-green{color:#0F6E56}
+.scope-box{background:#FDF3E0;border:0.5px solid #EFC97A;border-left:3px solid #B8860B;border-radius:0 var(--border-radius-sm) var(--border-radius-sm) 0;padding:.75rem 1rem;font-size:12px;color:#7A4E00;line-height:1.6;margin-bottom:1rem}
+.future-item{display:flex;gap:.5rem;align-items:flex-start;margin:.3rem 0;font-size:12px;color:var(--color-text-secondary)}
+.future-dot{min-width:5px;height:5px;border-radius:50%;background:var(--color-text-tertiary);margin-top:5px;flex-shrink:0}
+.closing{text-align:center;padding:1.25rem;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);margin-top:1rem;background:var(--color-background-secondary)}
+.closing-text{font-size:14px;color:var(--color-text-primary);font-weight:500;line-height:1.7}
+.closing-sub{font-size:12px;color:var(--color-text-tertiary);margin-top:.4rem}
+</style>
+<div class="slide">
+  <div class="slide-tag">Slide 13 · Conclusion</div>
+  <div class="slide-title">Conclusion</div>
+
+  <!-- 4 key takeaways -->
+  <div class="card-label">4 ข้อสรุปหลัก</div>
+  <div class="card" style="margin-bottom:1rem;background:var(--color-background-primary)">
+    <div class="takeaway-row">
+      <div class="takeaway-num">1</div>
+      <div class="takeaway-body">
+        <strong>Overestimation bias มีอยู่จริงและวัดได้</strong>
+        <span> — Q-Learning มี MaxQ Bias = <span class="num-inline col-red">+0.796</span> ใน tabular setting (5,000 ep, 5 seeds) ยืนยันทฤษฎีของ van Hasselt (2010) ว่า max operator สะสม noise จนทำให้ Q สูงกว่า MC return จริง</span>
+      </div>
+    </div>
+    <div class="takeaway-row">
+      <div class="takeaway-num">2</div>
+      <div class="takeaway-body">
+        <strong>Double estimator แก้ bias ได้จริง แต่มี trade-off</strong>
+        <span> — DQL bias = <span class="num-inline col-green">−1.241</span>, reward สูงกว่า +11.6% และ variance ต่ำกว่า แต่ underestimate นิดหน่อย ตรงกับ Lemma 1 ของ van Hasselt (2010) ที่บอกว่า E{Q^B(a*)} ≤ max E{Q}</span>
+      </div>
+    </div>
+    <div class="takeaway-row">
+      <div class="takeaway-num">3</div>
+      <div class="takeaway-body">
+        <strong>Deadly Triad ปิดบัง Overestimation Bias ใน Deep RL</strong>
+        <span> — ก่อนจูนพารามิเตอร์ Q-values พังทลายดิ่งลงเหว (<span class="num-inline col-red">−17,539</span>) แต่เมื่อแก้ด้วย Hyperparameter Tuning สำเร็จ ธรรมชาติที่แท้จริงจึงเผยออกมา ทำให้เห็นว่า DQN มี Overestimation Bias <span class="num-inline col-red">+0.297</span> ในขณะที่ DDQN ช่วยลดเหลือ <span class="num-inline col-green">+0.202</span> ได้จริง</span>
+      </div>
+    </div>
+    <div class="takeaway-row">
+      <div class="takeaway-num">4</div>
+      <div class="takeaway-body">
+        <strong>Bias ≠ Policy Quality (ความเก่งไม่เกี่ยวกับ Bias)</strong>
+        <span> — แม้ Double DQN จะลด Bias ได้ดีกว่า แต่มาตรฐาน DQN กลับทำคะแนน (Reward) เฉลี่ยได้สูงกว่า (<span class="num-inline col-green">355.7 vs 285.4</span>) ความ 'มองโลกในแง่ดี' (Optimism) ช่วยให้มันควบคุมได้ลื่นไหลกว่าพฤติกรรม 'ระแวง' (Pessimism) ของ DDQN</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <!-- Scope change -->
+      <div class="scope-box">
+        <strong>Scope adjustment:</strong> PER ถูกแทนด้วยการวิเคราะห์ Deadly Triad และ hyperparameter tuning เนื่องจาก Phase 2 พบ Q-value divergence รุนแรงที่ต้องเข้าใจและแก้ก่อน — การตัดสินใจนี้ทำให้การวิเคราะห์ overestimation bias มีความลึกมากขึ้น สอดคล้องกับ core objective ของโปรเจกต์
+      </div>
+
+      <!-- Limitations -->
+      <div class="card-label" style="margin-top:.75rem">Limitations</div>
+      <div class="card">
+        <div class="future-item"><div class="future-dot"></div><div>จำกัดขอบเขตใน CartPole — สิ่งแวดล้อมที่ง่ายเกินไปอาจทำให้เห็นช่องว่างระหว่าง DQN และ DDQN ไม่ชัดเจนเท่าที่ควร</div></div>
+        <div class="future-item"><div class="future-dot"></div><div>ระยะเวลาการเทรนสั้น — การเทรนเพียง 1,000 Episodes หลังแก้ Hyperparameter อาจยังไม่พอให้ DDQN (ที่ลู่เข้าช้ากว่า) ลู่เข้าสู่ระดับสูงสุดได้อย่างเต็มที่</div></div>
+        <div class="future-item"><div class="future-dot"></div><div>ยังไม่ได้ศึกษา interaction เชิงลึก — ความสัมพันธ์เชิงซ้อนระหว่าง α, γ และ target_update ว่ามันชดเชย Bias ให้กันและกันได้อย่างไร</div></div>
+      </div>
+    </div>
+
+    <div>
+      <!-- Future work -->
+      <div class="card-label">Future Work</div>
+      <div class="card" style="margin-bottom:.75rem">
+        <div class="future-item"><div class="future-dot" style="background:#185FA5"></div><div><strong>Implement PER (Prioritized Experience Replay)</strong> — นำฟีเจอร์ที่ถูกพักไว้กลับมาพัฒนาต่อ เพื่อช่วยเร่งการลู่เข้า (Convergence Speed) ของ Double DQN ให้สู้กับ DQN ได้</div></div>
+        <div class="future-item"><div class="future-dot" style="background:#185FA5"></div><div><strong>Decaying Learning Rate</strong> — ตามที่ Chen et al. (2021) แนะนำ เพื่อป้องกันไม่ให้น้ำหนัก Neural Network แกว่งตอนใกล้บรรลุเป้าหมาย</div></div>
+        <div class="future-item"><div class="future-dot" style="background:#185FA5"></div><div><strong>ทดสอบใน Environment ที่ซับซ้อนขึ้น</strong> — เช่น LunarLander หรือ MinAtar เพื่อพิสูจน์ความเหนือกว่าของ DDQN ในสภาวะที่มี Noise สูง</div></div>
+      </div>
+
+      <!-- Literature anchors -->
+      <div class="card-label">งานวิจัยที่สนับสนุน</div>
+      <div class="card">
+        <div class="future-item"><div class="future-dot" style="background:#5DCAA5"></div><div><span class="badge badge-teal" style="margin:0 4px 0 0">van Hasselt 2010</span>double estimator, Lemma 1</div></div>
+        <div class="future-item"><div class="future-dot" style="background:#85BAE8"></div><div><span class="badge badge-blue" style="margin:0 4px 0 0">Chen et al. 2021</span>α และ target_update ใน deep RL</div></div>
+        <div class="future-item"><div class="future-dot" style="background:#EFC97A"></div><div><span class="badge badge-amber" style="margin:0 4px 0 0">Wagenbach 2022</span>γ ส่งผลต่อ Q-value scale</div></div>
+        <div class="future-item"><div class="future-dot" style="background:var(--color-text-tertiary)"></div><div><span class="badge badge-gray" style="margin:0 4px 0 0">Sutton & Barto 2018</span>Deadly Triad definition</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="closing">
+    <div class="closing-text">overestimation bias ไม่ใช่แค่ตัวเลขที่ผิด — มันเปลี่ยน behavior, ลด stability และซ่อนตัวในรูปแบบต่างกันตาม setting<br>การวัดด้วย MC return คือกุญแจสำคัญในการมองเห็นและเข้าใจมัน</div>
+    <div class="closing-sub">FRA 503 Deep Reinforcement Learning · Suphawit Kaewpan 66340500055</div>
+  </div>
+</div>

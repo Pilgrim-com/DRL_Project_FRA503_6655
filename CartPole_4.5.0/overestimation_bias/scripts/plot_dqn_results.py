@@ -133,21 +133,28 @@ def plot_q_taken_vs_mc(logs, out):
     for algo, d in logs.items():
         eps = d.get("bias_eval_episodes", []); c = COLORS[algo]
         if not eps: continue
-        ax.plot(eps, d["bias_avg_q_taken_mean"], c, "-o", ms=4, label=LABELS[algo] + " Q_taken")
-        ax.plot(eps, d["bias_avg_mc_return_mean"], c, "--s", ms=4, label=LABELS[algo] + " MC")
+        ax.plot(eps, d["bias_avg_q_taken_mean"], color=c, marker="o", linestyle="-", ms=4, label=LABELS[algo] + " Q_taken")
+        ax.plot(eps, d["bias_avg_mc_return_mean"], color=c, marker="s", linestyle="--", ms=4, label=LABELS[algo] + " MC")
     ax.set(xlabel="Episode", ylabel="Value", title="Q_taken vs MC Return")
     ax.legend(); ax.grid(True, alpha=0.3)
     fig.savefig(os.path.join(out, "03_dqn_q_taken_vs_mc.png"), bbox_inches="tight"); plt.close()
 
 def plot_max_q_vs_mc(logs, out):
-    fig, ax = plt.subplots()
-    for algo, d in logs.items():
+    if not logs: return
+    n_algos = len(logs)
+    fig, axes = plt.subplots(1, n_algos, figsize=(5 * n_algos + 2, 5), sharey=True)
+    if n_algos == 1: axes = [axes]
+    for ax, (algo, d) in zip(axes, logs.items()):
         eps = d.get("bias_eval_episodes", []); c = COLORS[algo]
         if not eps: continue
-        ax.plot(eps, d["bias_avg_max_q_mean"], c, "-o", ms=4, label=LABELS[algo] + " max_a Q")
-        ax.plot(eps, d["bias_avg_mc_return_mean"], c, "--s", ms=4, label=LABELS[algo] + " MC")
-    ax.set(xlabel="Episode", ylabel="Value", title="max_a Q(s,a) vs MC Return")
-    ax.legend(); ax.grid(True, alpha=0.3)
+        ax.plot(eps, d["bias_avg_max_q_mean"], color=c, marker="o", linestyle="-", ms=4, label="max_a Q")
+        ax.plot(eps, d["bias_avg_mc_return_mean"], color="gray", marker="s", linestyle="--", ms=4, label="MC Return")
+        ax.set_xlabel("Episode")
+        if ax == axes[0]: ax.set_ylabel("Value")
+        ax.set_title(f"{LABELS[algo]}")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+    plt.suptitle("max_a Q(s,a) vs MC Return", fontsize=16, y=1.05)
     fig.savefig(os.path.join(out, "04_dqn_max_q_vs_mc.png"), bbox_inches="tight"); plt.close()
 
 def plot_taken_bias(logs, out):
@@ -251,7 +258,9 @@ def print_summary(logs):
                 vals[algo] = data[-1] if data else float("nan")
         q = vals.get("dqn", float("nan"))
         dq = vals.get("double_dqn", float("nan"))
-        print(("  %-35s %" + "18" + fmt + " %" + "18" + fmt) % (name, q, dq))
+        q_str = f"{q:{fmt}}" if not np.isnan(q) else "nan"
+        dq_str = f"{dq:{fmt}}" if not np.isnan(dq) else "nan"
+        print(f"  {name:<35s} {q_str:>18s} {dq_str:>18s}")
     print("=" * 80 + "\n")
 
 

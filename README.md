@@ -23,7 +23,7 @@ During the transition to Deep RL, we encountered massive Q-value divergence caus
 * *Behavior:* Q-Learning produces a delayed-correction action pattern, whereas Double Q-Learning concentrates on targeted corrective actions.
 
 ### Experiment 2: Deep RL (DQN vs Double DQN)
-* **Before Tuning (Stability Diagnostic):** Both methods suffered from Deadly Triad divergence. Q-values collapsed to extreme negatives (DQN: -17,539, DDQN: -13,582).
+* **Before Tuning (Stability Diagnostic):** Both methods suffered from Deadly Triad divergence. MaxQ Bias collapsed to extreme negatives (DQN: -17,612, DDQN: -13,582).
 * **After Tuning:** Once stabilized (via lower $\gamma$, faster target updates, and gradient clipping), the expected bias mechanics re-emerged. DQN showed a higher positive bias (+0.297), while Double DQN maintained a lower bias (+0.202). 
 * *Conclusion:* Lower bias does not automatically guarantee better short-term policy performance; DQN achieved a higher final reward than Double DQN under the tested constraints.
 
